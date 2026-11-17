@@ -272,8 +272,9 @@
             // 
             // numericLatencyOutput
             // 
-            this.numericLatencyOutput.DecimalPlaces = 1;
+            this.numericLatencyOutput.DecimalPlaces = 3;
             this.numericLatencyOutput.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.numericLatencyOutput.Increment = 0.001m;
             this.numericLatencyOutput.Location = new System.Drawing.Point(136, 3);
             this.numericLatencyOutput.Name = "numericLatencyOutput";
             this.numericLatencyOutput.Size = new System.Drawing.Size(90, 23);
@@ -435,8 +436,9 @@
             // 
             // numericLatencyInput
             // 
-            this.numericLatencyInput.DecimalPlaces = 1;
+            this.numericLatencyInput.DecimalPlaces = 3;
             this.numericLatencyInput.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.numericLatencyInput.Increment = 0.001m;
             this.numericLatencyInput.Location = new System.Drawing.Point(126, 3);
             this.numericLatencyInput.Name = "numericLatencyInput";
             this.numericLatencyInput.Size = new System.Drawing.Size(90, 23);

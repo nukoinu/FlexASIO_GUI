@@ -71,11 +71,12 @@ namespace FlexASIOGUI
                 flexGUIConfig = Toml.ToModel<FlexGUIConfig>(tomlPathAsText, options: tomlModelOptions);
             }
 
+            // Control change events can update the model while applying the loaded settings.
+            var inputLatency = flexGUIConfig.input.suggestedLatencySeconds;
+            var outputLatency = flexGUIConfig.output.suggestedLatencySeconds;
+
             numericBufferSize.Maximum = 8192;
             numericBufferSize.Increment = 16;
-
-            numericLatencyInput.Increment = 0.1m;
-            numericLatencyOutput.Increment = 0.1m;
 
             for (var i = 0; i < Configuration.HostApiCount; i++)
             {
@@ -98,13 +99,13 @@ namespace FlexASIOGUI
             treeDevicesInput.SelectedNode = treeDevicesInput.Nodes.Cast<TreeNode>().FirstOrDefault(x => x.Text == (flexGUIConfig.input.device == "" ? "(None)" : flexGUIConfig.input.device));
             treeDevicesOutput.SelectedNode = treeDevicesOutput.Nodes.Cast<TreeNode>().FirstOrDefault(x => x.Text == (flexGUIConfig.output.device == "" ? "(None)" : flexGUIConfig.output.device));
 
-            checkBoxSetInputLatency.Checked = numericLatencyInput.Enabled = flexGUIConfig.input.suggestedLatencySeconds != null;
-            checkBoxSetOutputLatency.Checked = numericLatencyOutput.Enabled = flexGUIConfig.output.suggestedLatencySeconds != null;
+            checkBoxSetInputLatency.Checked = numericLatencyInput.Enabled = inputLatency.HasValue;
+            checkBoxSetOutputLatency.Checked = numericLatencyOutput.Enabled = outputLatency.HasValue;
 
-            if (flexGUIConfig.input.suggestedLatencySeconds != null)
-                numericLatencyInput.Value = (decimal)(double)flexGUIConfig.input.suggestedLatencySeconds;
-            if (flexGUIConfig.output.suggestedLatencySeconds != null)
-                numericLatencyOutput.Value = (decimal)(double)flexGUIConfig.output.suggestedLatencySeconds;
+            if (inputLatency.HasValue)
+                numericLatencyInput.Value = (decimal)inputLatency.Value;
+            if (outputLatency.HasValue)
+                numericLatencyOutput.Value = (decimal)outputLatency.Value;
 
             numericChannelsInput.Value = (decimal)(flexGUIConfig.input.channels ?? 0);
             numericChannelsOutput.Value = (decimal)(flexGUIConfig.output.channels ?? 0);
@@ -121,6 +122,9 @@ namespace FlexASIOGUI
             wasapiAutoConvertInput.Checked = flexGUIConfig.input.wasapiAutoConvert ?? false;
             wasapiAutoConvertOutput.Enabled = flexGUIConfig.output.wasapiAutoConvert != null;
             wasapiAutoConvertOutput.Checked = flexGUIConfig.output.wasapiAutoConvert ?? false;
+            flexGUIConfig.input.suggestedLatencySeconds = inputLatency;
+            flexGUIConfig.output.suggestedLatencySeconds = outputLatency;
+            GenerateOutput();
             return flexGUIConfig;
         }
 
