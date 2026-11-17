@@ -1,5 +1,7 @@
 This is a small GUI to make the configuration of https://github.com/dechamps/FlexASIO a bit quicker.
 
+[日本語の使い方ガイド](USAGE.ja.md)
+
 It should pick up your existing $Usersprofile/FlexASIO.toml file and read the basic parameters. Not all of them have been implemented yet...
 
 The x64 installer includes the .NET 11 Desktop Runtime. To run a regular build from source, install the [x64 .NET 11 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/11.0) or the x64 .NET 11 SDK.
