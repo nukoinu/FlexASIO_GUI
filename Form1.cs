@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 using Commons.Media.PortAudio;
 using System.Diagnostics;
@@ -19,17 +18,26 @@ namespace FlexASIOGUI
         private bool InitDone = false;
         private string TOMLPath;
         private FlexGUIConfig flexGUIConfig;
-        private Encoding legacyEncoding;
-        private readonly string flexasioGuiVersion = "0.35";
-        private readonly string flexasioVersion = "1.9";
+        private readonly string flexasioGuiVersion = typeof(Form1).Assembly.GetName().Version.ToString(2);
         private readonly string tomlName = "FlexASIO.toml";
         private readonly string docUrl = "https://github.com/dechamps/FlexASIO/blob/master/CONFIGURATION.md";
         TomlModelOptions tomlModelOptions = new();
 
         [DllImport(@"C:\Program Files\FlexASIO\x64\FlexASIO.dll")]
         public static extern int Initialize(string PathName, bool TestMode);
-        [DllImport(@"kernel32.dll")]
-        public static extern uint GetACP();
+        [DllImport("portaudio_x64", CallingConvention = CallingConvention.Cdecl)]
+        private static extern IntPtr Pa_GetDeviceInfo(int deviceIndex);
+
+        // These are the fields from the start of PortAudio's PaDeviceInfo.
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DeviceInfo
+        {
+            public int StructVersion;
+            public IntPtr Name;
+            public int HostApi;
+            public int MaxInputChannels;
+            public int MaxOutputChannels;
+        }
 
         public Form1()
         {
@@ -39,12 +47,6 @@ namespace FlexASIOGUI
 
             System.Globalization.CultureInfo customCulture = (System.Globalization.CultureInfo)System.Threading.Thread.CurrentThread.CurrentCulture.Clone();
             customCulture.NumberFormat.NumberDecimalSeparator = ".";
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-
-            // get the value of the "Language for non-Unicode programs" setting (1252 for English)
-            // note: in Win11 this could be UTF-8 already, since it's natively supported
-            legacyEncoding = Encoding.GetEncoding((int)GetACP());
-
             System.Threading.Thread.CurrentThread.CurrentCulture = customCulture;
             CultureInfo.DefaultThreadCurrentCulture = customCulture;
             CultureInfo.DefaultThreadCurrentUICulture = customCulture;
@@ -55,7 +57,8 @@ namespace FlexASIOGUI
             this.LoadFlexASIOConfig(TOMLPath);
 
             InitDone = true;
-            SetStatusMessage($"FlexASIO GUI for FlexASIO {flexasioVersion} started ({Configuration.VersionString})");
+            var driverVersion = FlexASIODriverVersion.GetInstalledVersion() ?? "version unknown";
+            SetStatusMessage($"FlexASIO driver {driverVersion} | GUI PortAudio: {Configuration.VersionString}");
             GenerateOutput();
         }
 
@@ -68,11 +71,12 @@ namespace FlexASIOGUI
                 flexGUIConfig = Toml.ToModel<FlexGUIConfig>(tomlPathAsText, options: tomlModelOptions);
             }
 
+            // Control change events can update the model while applying the loaded settings.
+            var inputLatency = flexGUIConfig.input.suggestedLatencySeconds;
+            var outputLatency = flexGUIConfig.output.suggestedLatencySeconds;
+
             numericBufferSize.Maximum = 8192;
             numericBufferSize.Increment = 16;
-
-            numericLatencyInput.Increment = 0.1m;
-            numericLatencyOutput.Increment = 0.1m;
 
             for (var i = 0; i < Configuration.HostApiCount; i++)
             {
@@ -95,13 +99,13 @@ namespace FlexASIOGUI
             treeDevicesInput.SelectedNode = treeDevicesInput.Nodes.Cast<TreeNode>().FirstOrDefault(x => x.Text == (flexGUIConfig.input.device == "" ? "(None)" : flexGUIConfig.input.device));
             treeDevicesOutput.SelectedNode = treeDevicesOutput.Nodes.Cast<TreeNode>().FirstOrDefault(x => x.Text == (flexGUIConfig.output.device == "" ? "(None)" : flexGUIConfig.output.device));
 
-            checkBoxSetInputLatency.Checked = numericLatencyInput.Enabled = flexGUIConfig.input.suggestedLatencySeconds != null;
-            checkBoxSetOutputLatency.Checked = numericLatencyOutput.Enabled = flexGUIConfig.output.suggestedLatencySeconds != null;
+            checkBoxSetInputLatency.Checked = numericLatencyInput.Enabled = inputLatency.HasValue;
+            checkBoxSetOutputLatency.Checked = numericLatencyOutput.Enabled = outputLatency.HasValue;
 
-            if (flexGUIConfig.input.suggestedLatencySeconds != null)
-                numericLatencyInput.Value = (decimal)(double)flexGUIConfig.input.suggestedLatencySeconds;
-            if (flexGUIConfig.output.suggestedLatencySeconds != null)
-                numericLatencyOutput.Value = (decimal)(double)flexGUIConfig.output.suggestedLatencySeconds;
+            if (inputLatency.HasValue)
+                numericLatencyInput.Value = (decimal)inputLatency.Value;
+            if (outputLatency.HasValue)
+                numericLatencyOutput.Value = (decimal)outputLatency.Value;
 
             numericChannelsInput.Value = (decimal)(flexGUIConfig.input.channels ?? 0);
             numericChannelsOutput.Value = (decimal)(flexGUIConfig.output.channels ?? 0);
@@ -118,44 +122,26 @@ namespace FlexASIOGUI
             wasapiAutoConvertInput.Checked = flexGUIConfig.input.wasapiAutoConvert ?? false;
             wasapiAutoConvertOutput.Enabled = flexGUIConfig.output.wasapiAutoConvert != null;
             wasapiAutoConvertOutput.Checked = flexGUIConfig.output.wasapiAutoConvert ?? false;
+            flexGUIConfig.input.suggestedLatencySeconds = inputLatency;
+            flexGUIConfig.output.suggestedLatencySeconds = outputLatency;
+            GenerateOutput();
             return flexGUIConfig;
         }
 
-        private string DescrambleUTF8(string s)
-        {
-            // portaudio incorrectly returns UTF-8 strings as if they were ANSI (CP1252 for most Latin systems, CP1251 for Cyrillic, etc...)
-            // this line fixes the issue by reading the input as CP* and parsing it as UTF-8
-            var bytes = legacyEncoding.GetBytes(s);
-            return Encoding.UTF8.GetString(bytes);
-        }
-
-        private TreeNode[] GetDevicesForBackend(string Backend, bool Input)
+        private TreeNode[] GetDevicesForBackend(string backend, bool input)
         {
             List<TreeNode> treeNodes = new List<TreeNode>();
             treeNodes.Add(new TreeNode("(None)"));
             for (var i = 0; i < Configuration.DeviceCount; i++)
             {
-                var deviceInfo = Configuration.GetDeviceInfo(i);
-
-                var apiInfo = Configuration.GetHostApiInfo(deviceInfo.hostApi);
-                
-                if (apiInfo.name != Backend) 
+                var deviceInfo = Marshal.PtrToStructure<DeviceInfo>(Pa_GetDeviceInfo(i));
+                var apiInfo = Configuration.GetHostApiInfo(deviceInfo.HostApi);
+                if (apiInfo.name != backend)
                     continue;
 
-                if (Input == true)
-                {
-                    if (deviceInfo.maxInputChannels > 0)
-                    {
-                        treeNodes.Add(new TreeNode(DescrambleUTF8(deviceInfo.name)));
-                    }
-                }
-                else
-                {
-                    if (deviceInfo.maxOutputChannels > 0)
-                    {
-                        treeNodes.Add(new TreeNode(DescrambleUTF8(deviceInfo.name)));
-                    }
-                }
+                var channelCount = input ? deviceInfo.MaxInputChannels : deviceInfo.MaxOutputChannels;
+                if (channelCount > 0)
+                    treeNodes.Add(new TreeNode(Marshal.PtrToStringUTF8(deviceInfo.Name)));
             }
             return treeNodes.ToArray();
         }

@@ -1,5 +1,5 @@
 #define MyAppName "FlexASIO GUI"
-#define MyAppVersion "0.35"
+#define MyAppVersion "0.37"
 #define MyAppPublisher "https://github.com/flipswitchingmonkey/FlexASIO_GUI"
 #define MyAppURL ""
 #define MyAppExeName "FlexASIOGUI.exe"
@@ -11,12 +11,14 @@
 AppId={{85A2342E-43B3-4527-A533-6F250F1E5765}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}.0.0
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={commonpf64}\FlexASIOGUI
+ArchitecturesAllowed=x64compatible
 DisableProgramGroupPage=yes
 ;OutputDir=
 OutputBaseFilename={#MyAppName}Installer_{#MyAppVersion}
@@ -32,7 +34,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ;Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\bin\x64\Release\net6.0-windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+Source: "..\bin\x64\Release\net11.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
