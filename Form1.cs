@@ -19,7 +19,6 @@ namespace FlexASIOGUI
         private string TOMLPath;
         private FlexGUIConfig flexGUIConfig;
         private readonly string flexasioGuiVersion = typeof(Form1).Assembly.GetName().Version.ToString(2);
-        private readonly string flexasioVersion = "1.9";
         private readonly string tomlName = "FlexASIO.toml";
         private readonly string docUrl = "https://github.com/dechamps/FlexASIO/blob/master/CONFIGURATION.md";
         TomlModelOptions tomlModelOptions = new();
@@ -58,7 +57,8 @@ namespace FlexASIOGUI
             this.LoadFlexASIOConfig(TOMLPath);
 
             InitDone = true;
-            SetStatusMessage($"FlexASIO GUI for FlexASIO {flexasioVersion} started ({Configuration.VersionString})");
+            var driverVersion = FlexASIODriverVersion.GetInstalledVersion() ?? "version unknown";
+            SetStatusMessage($"FlexASIO driver {driverVersion} | GUI PortAudio: {Configuration.VersionString}");
             GenerateOutput();
         }
 
