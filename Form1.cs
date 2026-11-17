@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 using Commons.Media.PortAudio;
 using System.Diagnostics;
@@ -19,7 +18,6 @@ namespace FlexASIOGUI
         private bool InitDone = false;
         private string TOMLPath;
         private FlexGUIConfig flexGUIConfig;
-        private Encoding legacyEncoding;
         private readonly string flexasioGuiVersion = "0.35";
         private readonly string flexasioVersion = "1.9";
         private readonly string tomlName = "FlexASIO.toml";
@@ -28,8 +26,19 @@ namespace FlexASIOGUI
 
         [DllImport(@"C:\Program Files\FlexASIO\x64\FlexASIO.dll")]
         public static extern int Initialize(string PathName, bool TestMode);
-        [DllImport(@"kernel32.dll")]
-        public static extern uint GetACP();
+        [DllImport("portaudio_x64", CallingConvention = CallingConvention.Cdecl)]
+        private static extern IntPtr Pa_GetDeviceInfo(int deviceIndex);
+
+        // These are the fields from the start of PortAudio's PaDeviceInfo.
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DeviceInfo
+        {
+            public int StructVersion;
+            public IntPtr Name;
+            public int HostApi;
+            public int MaxInputChannels;
+            public int MaxOutputChannels;
+        }
 
         public Form1()
         {
@@ -39,12 +48,6 @@ namespace FlexASIOGUI
 
             System.Globalization.CultureInfo customCulture = (System.Globalization.CultureInfo)System.Threading.Thread.CurrentThread.CurrentCulture.Clone();
             customCulture.NumberFormat.NumberDecimalSeparator = ".";
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-
-            // get the value of the "Language for non-Unicode programs" setting (1252 for English)
-            // note: in Win11 this could be UTF-8 already, since it's natively supported
-            legacyEncoding = Encoding.GetEncoding((int)GetACP());
-
             System.Threading.Thread.CurrentThread.CurrentCulture = customCulture;
             CultureInfo.DefaultThreadCurrentCulture = customCulture;
             CultureInfo.DefaultThreadCurrentUICulture = customCulture;
@@ -121,41 +124,20 @@ namespace FlexASIOGUI
             return flexGUIConfig;
         }
 
-        private string DescrambleUTF8(string s)
-        {
-            // portaudio incorrectly returns UTF-8 strings as if they were ANSI (CP1252 for most Latin systems, CP1251 for Cyrillic, etc...)
-            // this line fixes the issue by reading the input as CP* and parsing it as UTF-8
-            var bytes = legacyEncoding.GetBytes(s);
-            return Encoding.UTF8.GetString(bytes);
-        }
-
-        private TreeNode[] GetDevicesForBackend(string Backend, bool Input)
+        private TreeNode[] GetDevicesForBackend(string backend, bool input)
         {
             List<TreeNode> treeNodes = new List<TreeNode>();
             treeNodes.Add(new TreeNode("(None)"));
             for (var i = 0; i < Configuration.DeviceCount; i++)
             {
-                var deviceInfo = Configuration.GetDeviceInfo(i);
-
-                var apiInfo = Configuration.GetHostApiInfo(deviceInfo.hostApi);
-                
-                if (apiInfo.name != Backend) 
+                var deviceInfo = Marshal.PtrToStructure<DeviceInfo>(Pa_GetDeviceInfo(i));
+                var apiInfo = Configuration.GetHostApiInfo(deviceInfo.HostApi);
+                if (apiInfo.name != backend)
                     continue;
 
-                if (Input == true)
-                {
-                    if (deviceInfo.maxInputChannels > 0)
-                    {
-                        treeNodes.Add(new TreeNode(DescrambleUTF8(deviceInfo.name)));
-                    }
-                }
-                else
-                {
-                    if (deviceInfo.maxOutputChannels > 0)
-                    {
-                        treeNodes.Add(new TreeNode(DescrambleUTF8(deviceInfo.name)));
-                    }
-                }
+                var channelCount = input ? deviceInfo.MaxInputChannels : deviceInfo.MaxOutputChannels;
+                if (channelCount > 0)
+                    treeNodes.Add(new TreeNode(Marshal.PtrToStringUTF8(deviceInfo.Name)));
             }
             return treeNodes.ToArray();
         }
