@@ -18,7 +18,7 @@ namespace FlexASIOGUI
         private bool InitDone = false;
         private string TOMLPath;
         private FlexGUIConfig flexGUIConfig;
-        private readonly string flexasioGuiVersion = "0.35";
+        private readonly string flexasioGuiVersion = typeof(Form1).Assembly.GetName().Version.ToString(2);
         private readonly string flexasioVersion = "1.9";
         private readonly string tomlName = "FlexASIO.toml";
         private readonly string docUrl = "https://github.com/dechamps/FlexASIO/blob/master/CONFIGURATION.md";
